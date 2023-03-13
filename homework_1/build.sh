@@ -2,4 +2,6 @@
 
 set -e
 
-odin run . -debug -o:minimal -use-separate-modules -show-timings
+odin build . -debug -o:minimal -use-separate-modules -show-timings -out:test.bin
+echo OUTPUT:
+./test.bin
