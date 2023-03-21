@@ -13,6 +13,8 @@ Op :: enum u8 {
     MOV_IMMEDIATE_TO_REG = 0b1011,
     MOV_REG_OR_MEM_FROM_REG = 0b100010,
     MOV_IMMEDIATE_REG_MEM = 0b1100011,
+    MOV_MEM_TO_ACC = 0b1010000,
+    MOV_ACC_TO_MEM = 0b1010001,
     ADD_REG_OR_MEM_FROM_REG = 0b00000,
     ADD_IMMEDIATE_TO_ACC = 0b0000010,
     SUB_REG_OR_MEM_FROM_REG = 0b001010,
@@ -108,7 +110,6 @@ main :: proc() {
     logger := log.create_console_logger()
     context.logger = logger
     defer log.destroy_console_logger(logger)
-    log.info(size_of(type_info_of(Instruction)))
     if len(os.args) != 2 {
         fmt.printf("Usage: %s file.asm", os.args[0])
         os.exit(1)
@@ -119,7 +120,7 @@ main :: proc() {
         os.exit(1)
     }
     defer delete(data)
-
+    /* fmt.println(len(data)) */
     fd: os.Handle = os.stdout
     fmt.fprintf(fd, "bits 16\n\n")
     bytes_used := 0
@@ -197,14 +198,16 @@ get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
         case .sub:
             result_instruction.op = .SUB_IMMEDIATE_REG_MEM
         }
-
         bytes_used = get_displacement(&result_instruction, data, bytes_used)
 
         if result_instruction.w && !result_instruction.s {
             result_instruction.data = cast(u16)data[bytes_used] + cast(u16)data[bytes_used + 1] << 8
             bytes_used += 2
+        } else if result_instruction.w && result_instruction.s {
+            result_instruction.data = auto_cast data[bytes_used]
+            bytes_used += 1
         } else {
-            result_instruction.data = cast(u16)data[bytes_used]
+            result_instruction.data = auto_cast data[bytes_used]
             bytes_used += 1
         }
 
@@ -223,6 +226,24 @@ get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
             result_instruction.data = cast(u16)data[bytes_used]
             bytes_used += 1
         }
+
+    case cast(Op)(data[0] >> 1) == .MOV_ACC_TO_MEM:
+        result_instruction.op = .MOV_ACC_TO_MEM
+        result_instruction.w = extract(data[0], 0, 1) == 1
+
+        if result_instruction.w {
+            result_instruction.displ = cast(u16)data[1] + cast(u16)data[2] << 8
+            bytes_used += 1
+        } else do result_instruction.displ = cast(u16)data[1]
+
+    case cast(Op)(data[0] >> 1) == .MOV_MEM_TO_ACC:
+        result_instruction.op = .MOV_MEM_TO_ACC
+        result_instruction.w = extract(data[0], 0, 1) == 1
+
+        if result_instruction.w {
+            result_instruction.displ = cast(u16)data[1] + cast(u16)data[2] << 8
+            bytes_used += 1
+        } else do result_instruction.displ = cast(u16)data[1]
 
     case cast(Op)data[0] == .JMP_EQUAL:
         fallthrough
@@ -265,68 +286,77 @@ get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
     case cast(Op)data[0] == .JMP_CX_ZERO:
         result_instruction.op = cast(Op)data[0]
         result_instruction.data = cast(u16)data[1]
+
     case:
+        fmt.eprintf("%x\n", data[0])
         panic("ERROR: Unknown instrunction")
     }
 
     return result_instruction, bytes_used
 
     get_data_immidiate :: proc(result_instruction: ^Instruction, data: []byte, bytes_used: int) -> int {
-	bytes_used := bytes_used
-	if result_instruction.w {
+        bytes_used := bytes_used
+        if result_instruction.w {
             result_instruction.data = cast(u16)data[1] + cast(u16)data[2] << 8
             bytes_used += 1
-	} else do result_instruction.data = cast(u16)data[1]
-	return bytes_used
+        } else do result_instruction.data = cast(u16)data[1]
+        return bytes_used
     }
 
     get_displacement :: proc(result_instruction: ^Instruction, data: []byte, bytes_used: int) -> int {
-	bytes_used := bytes_used
-	switch result_instruction.mod {
-	case .MEMORY_MODE_8BIT_DISP:
-            result_instruction.displ = cast(u16)data[2]
-            bytes_used += 1
-	case .MEMORY_MODE_16BIT_DISP:
+        bytes_used := bytes_used
+        switch result_instruction.mod {
+        case .MEMORY_MODE_8BIT_DISP:
+            if result_instruction.w {
+                negative := extract(data[2], 7, 1) == 1
+                result_instruction.displ = cast(u16)data[2] | 0xff00 if negative else cast(u16)data[2]
+                bytes_used += 1
+            } else {
+                result_instruction.displ = cast(u16)data[2]
+                bytes_used += 1
+            }
+        case .MEMORY_MODE_16BIT_DISP:
             result_instruction.displ = (cast(u16)data[2]) + cast(u16)data[3] << 8
             bytes_used += 2
-	case .MEMORY_MODE:
+        case .MEMORY_MODE:
             if result_instruction.r_m == 0b110 {
-		result_instruction.displ = (cast(u16)data[2]) + cast(u16)data[3] << 8
-		bytes_used += 2
+                result_instruction.displ = (cast(u16)data[2]) + cast(u16)data[3] << 8
+                bytes_used += 2
             }
-	case .REGISTER_MODE:
-	}
-	return bytes_used
+        case .REGISTER_MODE:
+        }
+        return bytes_used
     }
 
     reg_or_mem_from_reg :: proc(result_instruction: ^Instruction, data: []byte, bytes_used: int) -> int {
-	using bits
-	bytes_used := bytes_used
-	dw_u8 := extract(data[0], 0, 2)
-	if dw_u8 & 0b1 == 0b1 do result_instruction.w = true
-	if (dw_u8 >> 1) & 0b1 == 0b1 do result_instruction.d = true
+        using bits
+        bytes_used := bytes_used
+        dw_u8 := extract(data[0], 0, 2)
+        if dw_u8 & 0b1 == 0b1 do result_instruction.w = true
+        if (dw_u8 >> 1) & 0b1 == 0b1 do result_instruction.d = true
 
-	mod_u8 := extract(data[1], 6, 2)
-	result_instruction.mod = cast(Mod_encodings)mod_u8
+        mod_u8 := extract(data[1], 6, 2)
+        result_instruction.mod = cast(Mod_encodings)mod_u8
 
-	reg_u8 := extract(data[1], 3, 3)
-	result_instruction.reg = cast(Registers_wide)reg_u8 if result_instruction.w else cast(Registers_non_wide)reg_u8
+        reg_u8 := extract(data[1], 3, 3)
+        result_instruction.reg = cast(Registers_wide)reg_u8 if result_instruction.w else cast(Registers_non_wide)reg_u8
 
-	r_m_u8 := extract(data[1], 0, 3)
-	result_instruction.r_m = r_m_u8
+        r_m_u8 := extract(data[1], 0, 3)
+        result_instruction.r_m = r_m_u8
 
-	bytes_used = get_displacement(result_instruction, data, bytes_used)
-	return bytes_used
+        bytes_used = get_displacement(result_instruction, data, bytes_used)
+        return bytes_used
     }
 }
 
 
-
-Op_strings: #sparse [Op]string = {
+Op_strings: #sparse[Op]string = {
     .NONE                         = "",
     .ARITHMETIC_IMMEDIATE_REG_MEM = "",
     .MOV_IMMEDIATE_TO_REG         = "mov",
     .MOV_REG_OR_MEM_FROM_REG      = "mov",
+    .MOV_MEM_TO_ACC               = "mov",
+    .MOV_ACC_TO_MEM               = "mov",
     .ADD_REG_OR_MEM_FROM_REG      = "add",
     .ADD_IMMEDIATE_TO_ACC         = "add",
     .SUB_REG_OR_MEM_FROM_REG      = "sub",
@@ -386,27 +416,27 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
         case .MEMORY_MODE_8BIT_DISP, .MEMORY_MODE_16BIT_DISP:
             displ_modified, is_negative := transform_displacement_if_negative(displ, w)
             sign := "-" if is_negative else "+"
-		if d {
-                    fmt.fprintf(
-			fd,
-			"%v %v, [%v %s %v]\n",
-			Op_strings[op],
-			reg,
-			Effective_address_strings[auto_cast r_m],
-			sign,
-			displ_modified,
-                    )
-		} else {
-                    fmt.fprintf(
-			fd,
-			"%v [%v %s %v], %v\n",
-			Op_strings[op],
-			Effective_address_strings[auto_cast r_m],
-			sign,
-			displ_modified,
-			reg,
-                    )
-		}
+            if d {
+                fmt.fprintf(
+                    fd,
+                    "%v %v, [%v %s %v]\n",
+                    Op_strings[op],
+                    reg,
+                    Effective_address_strings[auto_cast r_m],
+                    sign,
+                    displ_modified,
+                )
+            } else {
+                fmt.fprintf(
+                    fd,
+                    "%v [%v %s %v], %v\n",
+                    Op_strings[op],
+                    Effective_address_strings[auto_cast r_m],
+                    sign,
+                    displ_modified,
+                    reg,
+                )
+            }
         case .MEMORY_MODE:
             if r_m == 0b110 {
                 if d {
@@ -430,13 +460,16 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
             reg_r_m: Register = cast(Registers_wide)r_m if w else cast(Registers_non_wide)r_m
             fmt.fprintf(fd, "%v %v, %v\n", Op_strings[op], reg_r_m, data)
         case .MEMORY_MODE_8BIT_DISP, .MEMORY_MODE_16BIT_DISP:
+            displ_modified, is_negative := transform_displacement_if_negative(displ, w)
+            sign := "-" if is_negative else "+"
             fmt.fprintf(
                 fd,
-                "%v %v [%v + %v], %v\n",
+                "%v %v [%v %s %v], %v\n",
                 Op_strings[op],
                 size,
                 Effective_address_strings[auto_cast r_m],
-                displ,
+                sign,
+                displ_modified,
                 data,
             )
         case .MEMORY_MODE:
@@ -454,6 +487,12 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
             }
         }
 
+    case .MOV_ACC_TO_MEM:
+        fmt.fprintf(fd, "%v [%v], ax\n", Op_strings[op], displ)
+
+    case .MOV_MEM_TO_ACC:
+        fmt.fprintf(fd, "%v ax, [%v]\n", Op_strings[op], displ)
+	
     case .JMP_EQUAL, .JMP_ABOVE, .JMP_BELOW, .JMP_BELOW_OR_EQUAL, .JMP_CX_ZERO, .JMP_GREATER, .JMP_LESS,
 	    .JMP_LESS_OR_EQUAL, .JMP_NOT_BELOW, .JMP_NOT_EQUAL, .JMP_NOT_LESS, .JMP_NOT_OVERFLOW, .JMP_NOT_PARITY,
 	    .JMP_NOT_SIGN, .JMP_OVERFLOW, .JMP_PARITY, .JMP_SIGN, .LOOP, .LOOP_WHILE_NOT_ZERO, .LOOP_WHILE_ZERO:
@@ -463,7 +502,7 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
         negative_displacement := (~data_u8) + 1 - 2
         if is_negative {
             if negative_displacement == 0 do fmt.fprintf(fd, "%v $+%v\n", Op_strings[op], negative_displacement)
-	    else do fmt.fprintf(fd, "%v $-%v\n", Op_strings[op], negative_displacement)
+            else do fmt.fprintf(fd, "%v $-%v\n", Op_strings[op], negative_displacement)
         } else do fmt.fprintf(fd, "%v $+%v\n", Op_strings[op], data_u8 + 2)
 
     case .NONE, .ARITHMETIC_IMMEDIATE_REG_MEM:
@@ -474,16 +513,11 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
 transform_displacement_if_negative :: proc(displacement: u16, wide: bool) -> (u16, bool) {
     displacement := displacement
     if wide {
-        negative := displacement >> 15 == 0b1
-        if !negative {
-            negative = extract(displacement, 7, 1) == 0b1
-            displacement = (~(displacement | 0xff00) + 1) if negative else displacement
-            return displacement, negative
-        }
-        displacement = (~displacement) + 1
+        negative := displacement >> 15 == 1
+        displacement = (~displacement) + 1 if negative else displacement
         return displacement, negative
     } else {
-        negative := extract(displacement, 7, 1) == 0b1
+        negative := extract(displacement, 7, 1) == 1
         displacement_u8: u8 = auto_cast extract(displacement, 0, 8)
         displacement_u8 = (~displacement_u8) + 1 if negative else displacement_u8
         displacement = cast(u16)displacement_u8
