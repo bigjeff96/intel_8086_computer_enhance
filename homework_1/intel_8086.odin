@@ -204,7 +204,8 @@ get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
             result_instruction.data = cast(u16)data[bytes_used] + cast(u16)data[bytes_used + 1] << 8
             bytes_used += 2
         } else if result_instruction.w && result_instruction.s {
-            result_instruction.data = auto_cast data[bytes_used]
+	    negative := extract(data[bytes_used], 7, 1) == 1
+            result_instruction.data = cast(u16)data[bytes_used] | 0xff00 if negative else cast(u16)data[bytes_used]
             bytes_used += 1
         } else {
             result_instruction.data = auto_cast data[bytes_used]
