@@ -204,8 +204,7 @@ get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
             result_instruction.data = cast(u16)data[bytes_used] + cast(u16)data[bytes_used + 1] << 8
             bytes_used += 2
         } else if result_instruction.w && result_instruction.s {
-	    negative := extract(data[bytes_used], 7, 1) == 1
-            result_instruction.data = cast(u16)data[bytes_used] | 0xff00 if negative else cast(u16)data[bytes_used]
+	    result_instruction.data = auto_cast cast(i16)cast(i8)data[bytes_used]
             bytes_used += 1
         } else {
             result_instruction.data = auto_cast data[bytes_used]
@@ -309,9 +308,8 @@ get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
         switch result_instruction.mod {
         case .MEMORY_MODE_8BIT_DISP:
             if result_instruction.w {
-                negative := extract(data[2], 7, 1) == 1
-                result_instruction.displ = cast(u16)data[2] | 0xff00 if negative else cast(u16)data[2]
-                bytes_used += 1
+		result_instruction.displ = auto_cast cast(i16)cast(i8) data[2]
+		bytes_used += 1
             } else {
                 result_instruction.displ = cast(u16)data[2]
                 bytes_used += 1
