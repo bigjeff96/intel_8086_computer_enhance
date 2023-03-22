@@ -204,7 +204,7 @@ get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
             result_instruction.data = cast(u16)data[bytes_used] + cast(u16)data[bytes_used + 1] << 8
             bytes_used += 2
         } else if result_instruction.w && result_instruction.s {
-	    result_instruction.data = auto_cast cast(i16)cast(i8)data[bytes_used]
+            result_instruction.data = auto_cast cast(i16)cast(i8)data[bytes_used]
             bytes_used += 1
         } else {
             result_instruction.data = auto_cast data[bytes_used]
@@ -308,8 +308,8 @@ get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
         switch result_instruction.mod {
         case .MEMORY_MODE_8BIT_DISP:
             if result_instruction.w {
-		result_instruction.displ = auto_cast cast(i16)cast(i8) data[2]
-		bytes_used += 1
+                result_instruction.displ = auto_cast cast(i16)cast(i8)data[2]
+                bytes_used += 1
             } else {
                 result_instruction.displ = cast(u16)data[2]
                 bytes_used += 1
@@ -491,10 +491,8 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
 
     case .MOV_MEM_TO_ACC:
         fmt.fprintf(fd, "%v ax, [%v]\n", Op_strings[op], displ)
-	
-    case .JMP_EQUAL, .JMP_ABOVE, .JMP_BELOW, .JMP_BELOW_OR_EQUAL, .JMP_CX_ZERO, .JMP_GREATER, .JMP_LESS,
-	    .JMP_LESS_OR_EQUAL, .JMP_NOT_BELOW, .JMP_NOT_EQUAL, .JMP_NOT_LESS, .JMP_NOT_OVERFLOW, .JMP_NOT_PARITY,
-	    .JMP_NOT_SIGN, .JMP_OVERFLOW, .JMP_PARITY, .JMP_SIGN, .LOOP, .LOOP_WHILE_NOT_ZERO, .LOOP_WHILE_ZERO:
+
+    case .JMP_EQUAL, .JMP_ABOVE, .JMP_BELOW, .JMP_BELOW_OR_EQUAL, .JMP_CX_ZERO, .JMP_GREATER, .JMP_LESS, .JMP_LESS_OR_EQUAL, .JMP_NOT_BELOW, .JMP_NOT_EQUAL, .JMP_NOT_LESS, .JMP_NOT_OVERFLOW, .JMP_NOT_PARITY, .JMP_NOT_SIGN, .JMP_OVERFLOW, .JMP_PARITY, .JMP_SIGN, .LOOP, .LOOP_WHILE_NOT_ZERO, .LOOP_WHILE_ZERO:
         data_u8: u8 = auto_cast extract(data, 0, 8)
         is_negative := extract(data_u8, 7, 1) == 0b1 // if leading bit is 1 => negative
         // twos complement allowes us to have a unique zero, not +- 0, just 0
