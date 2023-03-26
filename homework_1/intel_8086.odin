@@ -120,7 +120,6 @@ main :: proc() {
         os.exit(1)
     }
     defer delete(data)
-    /* fmt.println(len(data)) */
     fd: os.Handle = os.stdout
     fmt.fprintf(fd, "bits 16\n\n")
     bytes_used := 0
