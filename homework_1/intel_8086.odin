@@ -102,7 +102,7 @@ Instruction :: struct {
     mod:   Mod_encodings, // 2 bits
     reg:   Register, // 3 bits
     r_m:   u8, // 3 bits
-    displ: u16, // can be 8 or 16 bits
+    displ: i16, // can be 8 or 16 bits
     data:  u16, // can be 8 or 16 bits
 }
 
@@ -231,18 +231,18 @@ get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
         result_instruction.w = extract(data[0], 0, 1) == 1
 
         if result_instruction.w {
-            result_instruction.displ = cast(u16)data[1] + cast(u16)data[2] << 8
+            result_instruction.displ = cast(i16)(cast(u16)data[1] + cast(u16)data[2] << 8)
             bytes_used += 1
-        } else do result_instruction.displ = cast(u16)data[1]
+        } else do result_instruction.displ = cast(i16)cast(i8)data[1]
 
     case cast(Op)(data[0] >> 1) == .MOV_MEM_TO_ACC:
         result_instruction.op = .MOV_MEM_TO_ACC
         result_instruction.w = extract(data[0], 0, 1) == 1
 
         if result_instruction.w {
-            result_instruction.displ = cast(u16)data[1] + cast(u16)data[2] << 8
+            result_instruction.displ = cast(i16)(cast(u16)data[1] + cast(u16)data[2] << 8)
             bytes_used += 1
-        } else do result_instruction.displ = cast(u16)data[1]
+        } else do result_instruction.displ = cast(i16)cast(i8)data[1]
 
     case cast(Op)data[0] == .JMP_EQUAL:
         fallthrough
@@ -307,18 +307,18 @@ get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
         switch result_instruction.mod {
         case .MEMORY_MODE_8BIT_DISP:
             if result_instruction.w {
-                result_instruction.displ = auto_cast cast(i16)cast(i8)data[2]
+                result_instruction.displ = cast(i16)cast(i8)data[2]
                 bytes_used += 1
             } else {
-                result_instruction.displ = cast(u16)data[2]
+                result_instruction.displ = cast(i16)cast(i8)data[2]
                 bytes_used += 1
             }
         case .MEMORY_MODE_16BIT_DISP:
-            result_instruction.displ = (cast(u16)data[2]) + cast(u16)data[3] << 8
+            result_instruction.displ = cast(i16)((cast(u16)data[2]) + cast(u16)data[3] << 8)
             bytes_used += 2
         case .MEMORY_MODE:
             if result_instruction.r_m == 0b110 {
-                result_instruction.displ = (cast(u16)data[2]) + cast(u16)data[3] << 8
+                result_instruction.displ = cast(i16)(cast(u16)data[2] + cast(u16)data[3] << 8)
                 bytes_used += 2
             }
         case .REGISTER_MODE:
@@ -412,8 +412,7 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
             reg_r_m: Register = cast(Registers_wide)r_m if w else cast(Registers_non_wide)r_m
             fmt.fprintf(fd, "%v %v, %v\n", Op_strings[op], reg_r_m, reg)
         case .MEMORY_MODE_8BIT_DISP, .MEMORY_MODE_16BIT_DISP:
-            displ_modified, is_negative := transform_displacement_if_negative(displ, w)
-            sign := "-" if is_negative else "+"
+            sign := "-" if displ < 0 else "+"
             if d {
                 fmt.fprintf(
                     fd,
@@ -422,7 +421,7 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
                     reg,
                     Effective_address_strings[auto_cast r_m],
                     sign,
-                    displ_modified,
+                    abs(displ),
                 )
             } else {
                 fmt.fprintf(
@@ -431,7 +430,7 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
                     Op_strings[op],
                     Effective_address_strings[auto_cast r_m],
                     sign,
-                    displ_modified,
+                    abs(displ),
                     reg,
                 )
             }
@@ -458,8 +457,7 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
             reg_r_m: Register = cast(Registers_wide)r_m if w else cast(Registers_non_wide)r_m
             fmt.fprintf(fd, "%v %v, %v\n", Op_strings[op], reg_r_m, data)
         case .MEMORY_MODE_8BIT_DISP, .MEMORY_MODE_16BIT_DISP:
-            displ_modified, is_negative := transform_displacement_if_negative(displ, w)
-            sign := "-" if is_negative else "+"
+            sign := "-" if displ < 0 else "+"
             fmt.fprintf(
                 fd,
                 "%v %v [%v %s %v], %v\n",
@@ -467,7 +465,7 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
                 size,
                 Effective_address_strings[auto_cast r_m],
                 sign,
-                displ_modified,
+                abs(displ),
                 data,
             )
         case .MEMORY_MODE:
@@ -491,7 +489,9 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
     case .MOV_MEM_TO_ACC:
         fmt.fprintf(fd, "%v ax, [%v]\n", Op_strings[op], displ)
 
-    case .JMP_EQUAL, .JMP_ABOVE, .JMP_BELOW, .JMP_BELOW_OR_EQUAL, .JMP_CX_ZERO, .JMP_GREATER, .JMP_LESS, .JMP_LESS_OR_EQUAL, .JMP_NOT_BELOW, .JMP_NOT_EQUAL, .JMP_NOT_LESS, .JMP_NOT_OVERFLOW, .JMP_NOT_PARITY, .JMP_NOT_SIGN, .JMP_OVERFLOW, .JMP_PARITY, .JMP_SIGN, .LOOP, .LOOP_WHILE_NOT_ZERO, .LOOP_WHILE_ZERO:
+    case .JMP_EQUAL, .JMP_ABOVE, .JMP_BELOW, .JMP_BELOW_OR_EQUAL, .JMP_CX_ZERO, .JMP_GREATER, .JMP_LESS,
+	    .JMP_LESS_OR_EQUAL, .JMP_NOT_BELOW, .JMP_NOT_EQUAL, .JMP_NOT_LESS, .JMP_NOT_OVERFLOW, .JMP_NOT_PARITY,
+	    .JMP_NOT_SIGN, .JMP_OVERFLOW, .JMP_PARITY, .JMP_SIGN, .LOOP, .LOOP_WHILE_NOT_ZERO, .LOOP_WHILE_ZERO:
         data_u8: u8 = auto_cast extract(data, 0, 8)
         is_negative := extract(data_u8, 7, 1) == 0b1 // if leading bit is 1 => negative
         // twos complement allowes us to have a unique zero, not +- 0, just 0
@@ -506,17 +506,3 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
     }
 }
 
-transform_displacement_if_negative :: proc(displacement: u16, wide: bool) -> (u16, bool) {
-    displacement := displacement
-    if wide {
-        negative := displacement >> 15 == 1
-        displacement = (~displacement) + 1 if negative else displacement
-        return displacement, negative
-    } else {
-        negative := extract(displacement, 7, 1) == 1
-        displacement_u8: u8 = auto_cast extract(displacement, 0, 8)
-        displacement_u8 = (~displacement_u8) + 1 if negative else displacement_u8
-        displacement = cast(u16)displacement_u8
-        return displacement, negative
-    }
-}
