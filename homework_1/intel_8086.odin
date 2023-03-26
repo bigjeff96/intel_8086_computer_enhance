@@ -347,58 +347,57 @@ get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
     }
 }
 
-
-Op_strings: #sparse[Op]string = {
-    .NONE                         = "",
-    .ARITHMETIC_IMMEDIATE_REG_MEM = "",
-    .MOV_IMMEDIATE_TO_REG         = "mov",
-    .MOV_REG_OR_MEM_FROM_REG      = "mov",
-    .MOV_MEM_TO_ACC               = "mov",
-    .MOV_ACC_TO_MEM               = "mov",
-    .ADD_REG_OR_MEM_FROM_REG      = "add",
-    .ADD_IMMEDIATE_TO_ACC         = "add",
-    .SUB_REG_OR_MEM_FROM_REG      = "sub",
-    .SUB_IMMEDIATE_TO_ACC         = "sub",
-    .CMP_REG_OR_MEM_FROM_REG      = "cmp",
-    .CMP_IMMEDIATE_TO_ACC         = "cmp",
-    .ADD_IMMEDIATE_REG_MEM        = "add",
-    .SUB_IMMEDIATE_REG_MEM        = "sub",
-    .CMP_IMMEDIATE_REG_MEM        = "cmp",
-    .MOV_IMMEDIATE_REG_MEM        = "mov",
-    .JMP_EQUAL                    = "je",
-    .JMP_LESS                     = "jl",
-    .JMP_LESS_OR_EQUAL            = "jle",
-    .JMP_BELOW                    = "jb",
-    .JMP_BELOW_OR_EQUAL           = "jbe",
-    .JMP_PARITY                   = "jp",
-    .JMP_OVERFLOW                 = "jo",
-    .JMP_SIGN                     = "js",
-    .JMP_NOT_EQUAL                = "jne",
-    .JMP_NOT_LESS                 = "jnl",
-    .JMP_GREATER                  = "jg",
-    .JMP_NOT_BELOW                = "jnb",
-    .JMP_ABOVE                    = "ja",
-    .JMP_NOT_PARITY               = "jnp",
-    .JMP_NOT_OVERFLOW             = "jno",
-    .JMP_NOT_SIGN                 = "jns",
-    .LOOP                         = "loop",
-    .LOOP_WHILE_ZERO              = "loopz",
-    .LOOP_WHILE_NOT_ZERO          = "loopnz",
-    .JMP_CX_ZERO                  = "jcxz",
-}
-
-Effective_address_strings := [Effective_address]string {
-    .BX_PLUS_SI = "bx + si",
-    .BX_PLUS_DI = "bx + di",
-    .BP_PLUS_SI = "bp + si",
-    .BP_PLUS_DI = "bp + di",
-    .SI         = "si",
-    .DI         = "di",
-    .BP         = "bp",
-    .BX         = "bx",
-}
-
 write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
+    @(static)
+    Op_strings: #sparse[Op]string = {
+	    .NONE                         = "",
+	    .ARITHMETIC_IMMEDIATE_REG_MEM = "",
+	    .MOV_IMMEDIATE_TO_REG         = "mov",
+	    .MOV_REG_OR_MEM_FROM_REG      = "mov",
+	    .MOV_MEM_TO_ACC               = "mov",
+	    .MOV_ACC_TO_MEM               = "mov",
+	    .ADD_REG_OR_MEM_FROM_REG      = "add",
+	    .ADD_IMMEDIATE_TO_ACC         = "add",
+	    .SUB_REG_OR_MEM_FROM_REG      = "sub",
+	    .SUB_IMMEDIATE_TO_ACC         = "sub",
+	    .CMP_REG_OR_MEM_FROM_REG      = "cmp",
+	    .CMP_IMMEDIATE_TO_ACC         = "cmp",
+	    .ADD_IMMEDIATE_REG_MEM        = "add",
+	    .SUB_IMMEDIATE_REG_MEM        = "sub",
+	    .CMP_IMMEDIATE_REG_MEM        = "cmp",
+	    .MOV_IMMEDIATE_REG_MEM        = "mov",
+	    .JMP_EQUAL                    = "je",
+	    .JMP_LESS                     = "jl",
+	    .JMP_LESS_OR_EQUAL            = "jle",
+	    .JMP_BELOW                    = "jb",
+	    .JMP_BELOW_OR_EQUAL           = "jbe",
+	    .JMP_PARITY                   = "jp",
+	    .JMP_OVERFLOW                 = "jo",
+	    .JMP_SIGN                     = "js",
+	    .JMP_NOT_EQUAL                = "jne",
+	    .JMP_NOT_LESS                 = "jnl",
+	    .JMP_GREATER                  = "jg",
+	    .JMP_NOT_BELOW                = "jnb",
+	    .JMP_ABOVE                    = "ja",
+	    .JMP_NOT_PARITY               = "jnp",
+	    .JMP_NOT_OVERFLOW             = "jno",
+	    .JMP_NOT_SIGN                 = "jns",
+	    .LOOP                         = "loop",
+	    .LOOP_WHILE_ZERO              = "loopz",
+	    .LOOP_WHILE_NOT_ZERO          = "loopnz",
+	    .JMP_CX_ZERO                  = "jcxz",
+    }
+    @(static)
+    Effective_address_strings := [Effective_address]string {
+	    .BX_PLUS_SI = "bx + si",
+	    .BX_PLUS_DI = "bx + di",
+	    .BP_PLUS_SI = "bp + si",
+	    .BP_PLUS_DI = "bp + di",
+	    .SI         = "si",
+	    .DI         = "di",
+	    .BP         = "bp",
+	    .BX         = "bx",
+    }
     using instruction
     assert(len(Op_strings[op]) != 0)
     switch op {
@@ -504,5 +503,6 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
     case .NONE, .ARITHMETIC_IMMEDIATE_REG_MEM:
         panic("Unknown instruction operation")
     }
+
 }
 
