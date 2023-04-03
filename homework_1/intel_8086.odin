@@ -78,6 +78,18 @@ Registers_wide :: enum u8 {
     di = 0x7,
 }
 
+register_wide_to_u8 := [Registers_wide]u8{
+    .ax = 0x0,
+    .cx = 0x1,
+    .dx = 0x2,
+    .bx = 0x3,
+    .sp = 0x4,
+    .bp = 0x5,
+    .si = 0x6,
+    .di = 0x7,
+}
+
+
 Registers_non_wide :: enum u8 {
     al = 0x0,
     cl = 0x1,
@@ -87,6 +99,17 @@ Registers_non_wide :: enum u8 {
     ch = 0x5,
     dh = 0x6,
     bh = 0x7,
+}
+
+register_non_wide_to_u8 := [Registers_non_wide]u8 {
+    .al = 0x0,
+    .cl = 0x1,
+    .dl = 0x2,
+    .bl = 0x3,
+    .ah = 0x4,
+    .ch = 0x5,
+    .dh = 0x6,
+    .bh = 0x7,
 }
 
 Register :: union {
@@ -120,15 +143,22 @@ main :: proc() {
         os.exit(1)
     }
     defer delete(data)
-    fd: os.Handle = os.stdout
-    fmt.fprintf(fd, "bits 16\n\n")
-    bytes_used := 0
-    for i := 0; i < len(data); i += bytes_used {
-        shift := 7 if i + 7 <= len(data) else len(data) - i
-        instruction, bytes_used_by_inst := get_instruction_from_bytes(data[i:i + shift])
-        bytes_used = bytes_used_by_inst
-        write_asm_instruction(fd, &instruction)
+    fd, ok1 := os.open("test.asm", os.O_TRUNC | os.O_RDWR)
+    if !ok {
+	log.error("Can't make test.asm")
+	os.exit(1)
     }
+    fmt.fprintf(fd, "bits 16\n\n")
+    data_shifted := data[:]
+    registers := [8]u16{}
+    for len(data_shifted) > 0 {
+        instruction, bytes_used_by_inst := get_instruction_from_bytes(data_shifted)
+	data_shifted = data_shifted[bytes_used_by_inst:]
+        write_asm_instruction(fd, &instruction)
+	compute_instruction(registers[:], instruction)
+    }
+
+    print_registers(registers[:])
 }
 
 get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
@@ -291,6 +321,9 @@ get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
         panic("ERROR: Unknown instrunction")
     }
 
+    when !ODIN_DEBUG {
+	fmt.println(result_instruction.op)
+    }
     return result_instruction, bytes_used
 
     get_data_immidiate :: proc(result_instruction: ^Instruction, data: []byte, bytes_used: int) -> int {
@@ -350,53 +383,53 @@ get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
 write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
     @(static)
     Op_strings: #sparse[Op]string = {
-	    .NONE                         = "",
-	    .ARITHMETIC_IMMEDIATE_REG_MEM = "",
-	    .MOV_IMMEDIATE_TO_REG         = "mov",
-	    .MOV_REG_OR_MEM_FROM_REG      = "mov",
-	    .MOV_MEM_TO_ACC               = "mov",
-	    .MOV_ACC_TO_MEM               = "mov",
-	    .ADD_REG_OR_MEM_FROM_REG      = "add",
-	    .ADD_IMMEDIATE_TO_ACC         = "add",
-	    .SUB_REG_OR_MEM_FROM_REG      = "sub",
-	    .SUB_IMMEDIATE_TO_ACC         = "sub",
-	    .CMP_REG_OR_MEM_FROM_REG      = "cmp",
-	    .CMP_IMMEDIATE_TO_ACC         = "cmp",
-	    .ADD_IMMEDIATE_REG_MEM        = "add",
-	    .SUB_IMMEDIATE_REG_MEM        = "sub",
-	    .CMP_IMMEDIATE_REG_MEM        = "cmp",
-	    .MOV_IMMEDIATE_REG_MEM        = "mov",
-	    .JMP_EQUAL                    = "je",
-	    .JMP_LESS                     = "jl",
-	    .JMP_LESS_OR_EQUAL            = "jle",
-	    .JMP_BELOW                    = "jb",
-	    .JMP_BELOW_OR_EQUAL           = "jbe",
-	    .JMP_PARITY                   = "jp",
-	    .JMP_OVERFLOW                 = "jo",
-	    .JMP_SIGN                     = "js",
-	    .JMP_NOT_EQUAL                = "jne",
-	    .JMP_NOT_LESS                 = "jnl",
-	    .JMP_GREATER                  = "jg",
-	    .JMP_NOT_BELOW                = "jnb",
-	    .JMP_ABOVE                    = "ja",
-	    .JMP_NOT_PARITY               = "jnp",
-	    .JMP_NOT_OVERFLOW             = "jno",
-	    .JMP_NOT_SIGN                 = "jns",
-	    .LOOP                         = "loop",
-	    .LOOP_WHILE_ZERO              = "loopz",
-	    .LOOP_WHILE_NOT_ZERO          = "loopnz",
-	    .JMP_CX_ZERO                  = "jcxz",
+        .NONE                         = "",
+        .ARITHMETIC_IMMEDIATE_REG_MEM = "",
+        .MOV_IMMEDIATE_TO_REG         = "mov",
+        .MOV_REG_OR_MEM_FROM_REG      = "mov",
+        .MOV_MEM_TO_ACC               = "mov",
+        .MOV_ACC_TO_MEM               = "mov",
+        .ADD_REG_OR_MEM_FROM_REG      = "add",
+        .ADD_IMMEDIATE_TO_ACC         = "add",
+        .SUB_REG_OR_MEM_FROM_REG      = "sub",
+        .SUB_IMMEDIATE_TO_ACC         = "sub",
+        .CMP_REG_OR_MEM_FROM_REG      = "cmp",
+        .CMP_IMMEDIATE_TO_ACC         = "cmp",
+        .ADD_IMMEDIATE_REG_MEM        = "add",
+        .SUB_IMMEDIATE_REG_MEM        = "sub",
+        .CMP_IMMEDIATE_REG_MEM        = "cmp",
+        .MOV_IMMEDIATE_REG_MEM        = "mov",
+        .JMP_EQUAL                    = "je",
+        .JMP_LESS                     = "jl",
+        .JMP_LESS_OR_EQUAL            = "jle",
+        .JMP_BELOW                    = "jb",
+        .JMP_BELOW_OR_EQUAL           = "jbe",
+        .JMP_PARITY                   = "jp",
+        .JMP_OVERFLOW                 = "jo",
+        .JMP_SIGN                     = "js",
+        .JMP_NOT_EQUAL                = "jne",
+        .JMP_NOT_LESS                 = "jnl",
+        .JMP_GREATER                  = "jg",
+        .JMP_NOT_BELOW                = "jnb",
+        .JMP_ABOVE                    = "ja",
+        .JMP_NOT_PARITY               = "jnp",
+        .JMP_NOT_OVERFLOW             = "jno",
+        .JMP_NOT_SIGN                 = "jns",
+        .LOOP                         = "loop",
+        .LOOP_WHILE_ZERO              = "loopz",
+        .LOOP_WHILE_NOT_ZERO          = "loopnz",
+        .JMP_CX_ZERO                  = "jcxz",
     }
     @(static)
     Effective_address_strings := [Effective_address]string {
-	    .BX_PLUS_SI = "bx + si",
-	    .BX_PLUS_DI = "bx + di",
-	    .BP_PLUS_SI = "bp + si",
-	    .BP_PLUS_DI = "bp + di",
-	    .SI         = "si",
-	    .DI         = "di",
-	    .BP         = "bp",
-	    .BX         = "bx",
+        .BX_PLUS_SI = "bx + si",
+        .BX_PLUS_DI = "bx + di",
+        .BP_PLUS_SI = "bp + si",
+        .BP_PLUS_DI = "bp + di",
+        .SI         = "si",
+        .DI         = "di",
+        .BP         = "bp",
+        .BX         = "bx",
     }
     using instruction
     assert(len(Op_strings[op]) != 0)
@@ -506,3 +539,44 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
 
 }
 
+compute_instruction :: proc(registers: []u16, instruction: Instruction) {
+    using instruction
+    assert(len(registers) == 8)
+    #partial switch op {
+    case .MOV_IMMEDIATE_TO_REG:
+	switch in reg {
+	case Registers_wide:
+	    int_reg := register_wide_to_u8[reg.(Registers_wide)]
+	    test_int : int = auto_cast reg.(Registers_wide)
+	    registers[int_reg] = data
+	case Registers_non_wide:
+	    int_reg := register_non_wide_to_u8[reg.(Registers_non_wide)]
+	    registers[int_reg] = data
+	}
+
+    case .MOV_REG_OR_MEM_FROM_REG:
+	assert(mod == .REGISTER_MODE && w)
+	destination_index: u8
+	source_index: u8
+	if d {
+	    destination_index = register_wide_to_u8[reg.(Registers_wide)]
+	    source_index = r_m
+	} else {
+	    destination_index = r_m
+	    source_index = register_wide_to_u8[reg.(Registers_wide)]
+	}
+	registers[destination_index] = registers[source_index]
+    }
+}
+
+print_registers :: proc(registers: []u16) {
+    assert(len(registers) == 8)
+    fmt.println(Registers_wide.ax, registers[0])
+    fmt.println(Registers_wide.bx, registers[3])
+    fmt.println(Registers_wide.cx, registers[1])
+    fmt.println(Registers_wide.dx, registers[2])
+    fmt.println(Registers_wide.sp, registers[4])
+    fmt.println(Registers_wide.bp, registers[5])
+    fmt.println(Registers_wide.si, registers[6])
+    fmt.println(Registers_wide.di, registers[7])
+}
