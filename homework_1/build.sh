@@ -12,3 +12,4 @@ echo TEST_ASM:
 cat test.asm 
 nasm test.asm
 diff test $CHALLENGE
+rm test.asm test

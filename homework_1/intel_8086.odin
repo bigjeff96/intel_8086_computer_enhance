@@ -143,7 +143,7 @@ main :: proc() {
         os.exit(1)
     }
     defer delete(data)
-    fd, ok1 := os.open("test.asm", os.O_TRUNC | os.O_RDWR)
+    fd, ok1 := os.open("test.asm", os.O_RDWR | os.O_CREATE, 0o777)
     if !ok {
 	log.error("Can't make test.asm")
 	os.exit(1)
