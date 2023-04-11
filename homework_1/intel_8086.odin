@@ -9,125 +9,7 @@ import "core:math/bits"
 
 extract :: bits.bitfield_extract
 
-Op :: enum u8 {
-    MOV_IMMEDIATE_TO_REG = 0b1011,
-    MOV_REG_OR_MEM_FROM_REG = 0b100010,
-    MOV_IMMEDIATE_REG_MEM = 0b1100011,
-    MOV_MEM_TO_ACC = 0b1010000,
-    MOV_ACC_TO_MEM = 0b1010001,
-    ADD_REG_OR_MEM_FROM_REG = 0b00000,
-    ADD_IMMEDIATE_TO_ACC = 0b0000010,
-    SUB_REG_OR_MEM_FROM_REG = 0b001010,
-    SUB_IMMEDIATE_TO_ACC = 0b0010110,
-    CMP_REG_OR_MEM_FROM_REG = 0b001110,
-    CMP_IMMEDIATE_TO_ACC = 0b0011110,
-    ARITHMETIC_IMMEDIATE_REG_MEM = 0b100000,
-    JMP_EQUAL = 0b01110100,
-    JMP_LESS = 0b01111100,
-    JMP_LESS_OR_EQUAL = 0b01111110,
-    JMP_BELOW = 0b01110010,
-    JMP_BELOW_OR_EQUAL = 0b01110110,
-    JMP_PARITY = 0b01111010,
-    JMP_OVERFLOW = 0b01110000,
-    JMP_SIGN = 0b01111000,
-    JMP_NOT_EQUAL = 0b01110101,
-    JMP_NOT_LESS = 0b01111101,
-    JMP_GREATER = 0b01111111,
-    JMP_NOT_BELOW = 0b01110011,
-    JMP_ABOVE = 0b01110111,
-    JMP_NOT_PARITY = 0b01111011,
-    JMP_NOT_OVERFLOW = 0b01110001,
-    JMP_NOT_SIGN = 0b01111001,
-    LOOP = 0b11100010,
-    LOOP_WHILE_ZERO = 0b11100001,
-    LOOP_WHILE_NOT_ZERO = 0b11100000,
-    JMP_CX_ZERO = 0b11100011,
-    ADD_IMMEDIATE_REG_MEM,
-    SUB_IMMEDIATE_REG_MEM,
-    CMP_IMMEDIATE_REG_MEM,
-    NONE,
-}
 
-Mod_encodings :: enum u8 {
-    MEMORY_MODE            = 0x0,
-    REGISTER_MODE          = 0x3,
-    MEMORY_MODE_8BIT_DISP  = 0x1,
-    MEMORY_MODE_16BIT_DISP = 0x2,
-}
-
-
-Effective_address :: enum u8 {
-    BX_PLUS_SI,
-    BX_PLUS_DI,
-    BP_PLUS_SI,
-    BP_PLUS_DI,
-    SI,
-    DI,
-    BP,
-    BX,
-}
-
-Registers_wide :: enum u8 {
-    ax = 0x0,
-    cx = 0x1,
-    dx = 0x2,
-    bx = 0x3,
-    sp = 0x4,
-    bp = 0x5,
-    si = 0x6,
-    di = 0x7,
-}
-
-register_wide_to_u8 := [Registers_wide]u8{
-    .ax = 0x0,
-    .cx = 0x1,
-    .dx = 0x2,
-    .bx = 0x3,
-    .sp = 0x4,
-    .bp = 0x5,
-    .si = 0x6,
-    .di = 0x7,
-}
-
-
-Registers_non_wide :: enum u8 {
-    al = 0x0,
-    cl = 0x1,
-    dl = 0x2,
-    bl = 0x3,
-    ah = 0x4,
-    ch = 0x5,
-    dh = 0x6,
-    bh = 0x7,
-}
-
-register_non_wide_to_u8 := [Registers_non_wide]u8 {
-    .al = 0x0,
-    .cl = 0x1,
-    .dl = 0x2,
-    .bl = 0x3,
-    .ah = 0x4,
-    .ch = 0x5,
-    .dh = 0x6,
-    .bh = 0x7,
-}
-
-Register :: union {
-    Registers_wide,
-    Registers_non_wide,
-}
-
-Instruction :: struct {
-    op:    Op,
-    d:     bool, // 1 bit , d as destination
-    w:     bool, // 1 bit, w as wide
-    s:     bool,
-    mod:   Mod_encodings, // 2 bits
-    reg:   Register, // 3 bits
-    r_m:   u8, // 3 bits
-    displ: i16, // can be 8 or 16 bits
-    data:  u16, // can be 8 or 16 bits
-}
 
 main :: proc() {
     logger := log.create_console_logger()
@@ -579,4 +461,124 @@ print_registers :: proc(registers: []u16) {
     fmt.println(Registers_wide.bp, registers[5])
     fmt.println(Registers_wide.si, registers[6])
     fmt.println(Registers_wide.di, registers[7])
+}
+
+Op :: enum u8 {
+    MOV_IMMEDIATE_TO_REG = 0b1011,
+    MOV_REG_OR_MEM_FROM_REG = 0b100010,
+    MOV_IMMEDIATE_REG_MEM = 0b1100011,
+    MOV_MEM_TO_ACC = 0b1010000,
+    MOV_ACC_TO_MEM = 0b1010001,
+    ADD_REG_OR_MEM_FROM_REG = 0b00000,
+    ADD_IMMEDIATE_TO_ACC = 0b0000010,
+    SUB_REG_OR_MEM_FROM_REG = 0b001010,
+    SUB_IMMEDIATE_TO_ACC = 0b0010110,
+    CMP_REG_OR_MEM_FROM_REG = 0b001110,
+    CMP_IMMEDIATE_TO_ACC = 0b0011110,
+    ARITHMETIC_IMMEDIATE_REG_MEM = 0b100000,
+    JMP_EQUAL = 0b01110100,
+    JMP_LESS = 0b01111100,
+    JMP_LESS_OR_EQUAL = 0b01111110,
+    JMP_BELOW = 0b01110010,
+    JMP_BELOW_OR_EQUAL = 0b01110110,
+    JMP_PARITY = 0b01111010,
+    JMP_OVERFLOW = 0b01110000,
+    JMP_SIGN = 0b01111000,
+    JMP_NOT_EQUAL = 0b01110101,
+    JMP_NOT_LESS = 0b01111101,
+    JMP_GREATER = 0b01111111,
+    JMP_NOT_BELOW = 0b01110011,
+    JMP_ABOVE = 0b01110111,
+    JMP_NOT_PARITY = 0b01111011,
+    JMP_NOT_OVERFLOW = 0b01110001,
+    JMP_NOT_SIGN = 0b01111001,
+    LOOP = 0b11100010,
+    LOOP_WHILE_ZERO = 0b11100001,
+    LOOP_WHILE_NOT_ZERO = 0b11100000,
+    JMP_CX_ZERO = 0b11100011,
+    ADD_IMMEDIATE_REG_MEM,
+    SUB_IMMEDIATE_REG_MEM,
+    CMP_IMMEDIATE_REG_MEM,
+    NONE,
+}
+
+Mod_encodings :: enum u8 {
+    MEMORY_MODE            = 0x0,
+    REGISTER_MODE          = 0x3,
+    MEMORY_MODE_8BIT_DISP  = 0x1,
+    MEMORY_MODE_16BIT_DISP = 0x2,
+}
+
+
+Effective_address :: enum u8 {
+    BX_PLUS_SI,
+    BX_PLUS_DI,
+    BP_PLUS_SI,
+    BP_PLUS_DI,
+    SI,
+    DI,
+    BP,
+    BX,
+}
+
+Registers_wide :: enum u8 {
+    ax = 0x0,
+    cx = 0x1,
+    dx = 0x2,
+    bx = 0x3,
+    sp = 0x4,
+    bp = 0x5,
+    si = 0x6,
+    di = 0x7,
+}
+
+register_wide_to_u8 := [Registers_wide]u8{
+    .ax = 0x0,
+    .cx = 0x1,
+    .dx = 0x2,
+    .bx = 0x3,
+    .sp = 0x4,
+    .bp = 0x5,
+    .si = 0x6,
+    .di = 0x7,
+}
+
+
+Registers_non_wide :: enum u8 {
+    al = 0x0,
+    cl = 0x1,
+    dl = 0x2,
+    bl = 0x3,
+    ah = 0x4,
+    ch = 0x5,
+    dh = 0x6,
+    bh = 0x7,
+}
+
+register_non_wide_to_u8 := [Registers_non_wide]u8 {
+    .al = 0x0,
+    .cl = 0x1,
+    .dl = 0x2,
+    .bl = 0x3,
+    .ah = 0x4,
+    .ch = 0x5,
+    .dh = 0x6,
+    .bh = 0x7,
+}
+
+Register :: union {
+    Registers_wide,
+    Registers_non_wide,
+}
+
+Instruction :: struct {
+    op:    Op,
+    d:     bool, // 1 bit , d as destination
+    w:     bool, // 1 bit, w as wide
+    s:     bool,
+    mod:   Mod_encodings, // 2 bits
+    reg:   Register, // 3 bits
+    r_m:   u8, // 3 bits
+    displ: i16, // can be 8 or 16 bits
+    data:  u16, // can be 8 or 16 bits
 }
