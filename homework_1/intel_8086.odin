@@ -23,7 +23,7 @@ main :: proc() {
         os.exit(1)
     }
     defer delete(data)
-    fd, err := os.open("test.asm", os.O_RDWR | os.O_CREATE, 0o777)
+    fd, err := os.open("test.asm", os.O_RDWR | os.O_CREATE | os.O_TRUNC, 0o777)
     if err != os.ERROR_NONE {
 	log.error("Can't make test.asm")
 	os.exit(1)
@@ -38,12 +38,18 @@ main :: proc() {
 	ip += bytes_used_by_inst
 	fmt.println(instruction.op)
 	compute_instruction(instruction,registers[:], &flags, &ip)
-        write_asm_instruction(fd, instruction)
     }
 
     print_registers(registers[:])
     fmt.println(flags)
     fmt.println(ip)
+
+    ip = 0
+    for ip < len(data) {
+        instruction, bytes_used_by_inst := get_instruction_from_bytes(data[ip:])
+	ip += bytes_used_by_inst
+        write_asm_instruction(fd, instruction)
+    }
 }
 
 get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
@@ -481,6 +487,13 @@ compute_instruction :: proc(instruction: Instruction, registers: []u16, flags: ^
 	copy_dest -= data
 	flags.sign = extract(copy_dest, 15, 1) == 1
 	flags.zero = copy_dest == 0
+
+    case .JMP_NOT_EQUAL: //jmp not zero
+	if !flags.zero {
+	    data_i8 : i8 = auto_cast extract(data, 0, 8)
+	    ip^ += auto_cast data_i8
+	}
+	
     }
 
     get_dest_source_indices :: #force_inline proc(instruction: Instruction) -> (dest_index, source_index: u8) {
