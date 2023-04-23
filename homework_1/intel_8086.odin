@@ -9,8 +9,6 @@ import "core:math/bits"
 
 extract :: bits.bitfield_extract
 
-
-
 main :: proc() {
     logger := log.create_console_logger()
     context.logger = logger
@@ -25,22 +23,27 @@ main :: proc() {
         os.exit(1)
     }
     defer delete(data)
-    fd, ok1 := os.open("test.asm", os.O_RDWR | os.O_CREATE, 0o777)
-    if !ok {
+    fd, err := os.open("test.asm", os.O_RDWR | os.O_CREATE, 0o777)
+    if err != os.ERROR_NONE {
 	log.error("Can't make test.asm")
 	os.exit(1)
     }
     fmt.fprintf(fd, "bits 16\n\n")
-    data_shifted := data[:]
+    
     registers := [8]u16{}
-    for len(data_shifted) > 0 {
-        instruction, bytes_used_by_inst := get_instruction_from_bytes(data_shifted)
-	data_shifted = data_shifted[bytes_used_by_inst:]
-        write_asm_instruction(fd, &instruction)
-	compute_instruction(registers[:], instruction)
+    flags: Flags
+    ip := 0
+    for ip < len(data) {
+        instruction, bytes_used_by_inst := get_instruction_from_bytes(data[ip:])
+	ip += bytes_used_by_inst
+	fmt.println(instruction.op)
+	compute_instruction(instruction,registers[:], &flags, &ip)
+        write_asm_instruction(fd, instruction)
     }
 
     print_registers(registers[:])
+    fmt.println(flags)
+    fmt.println(ip)
 }
 
 get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
@@ -262,7 +265,7 @@ get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
     }
 }
 
-write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
+write_asm_instruction :: proc(fd: os.Handle, instruction: Instruction) {
     @(static)
     Op_strings: #sparse[Op]string = {
         .NONE                         = "",
@@ -421,33 +424,75 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: ^Instruction) {
 
 }
 
-compute_instruction :: proc(registers: []u16, instruction: Instruction) {
+compute_instruction :: proc(instruction: Instruction, registers: []u16, flags: ^Flags, ip: ^int) {
     using instruction
     assert(len(registers) == 8)
     #partial switch op {
     case .MOV_IMMEDIATE_TO_REG:
-	switch in reg {
-	case Registers_wide:
-	    int_reg := register_wide_to_u8[reg.(Registers_wide)]
-	    test_int : int = auto_cast reg.(Registers_wide)
-	    registers[int_reg] = data
-	case Registers_non_wide:
-	    int_reg := register_non_wide_to_u8[reg.(Registers_non_wide)]
-	    registers[int_reg] = data
-	}
+	assert(w)
+	dest_index : int = auto_cast reg.(Registers_wide)
+	registers[dest_index] = data
 
     case .MOV_REG_OR_MEM_FROM_REG:
 	assert(mod == .REGISTER_MODE && w)
-	destination_index: u8
-	source_index: u8
+	dest_index, source_index := get_dest_source_indices(instruction)
+	registers[dest_index] = registers[source_index]
+
+    case .SUB_REG_OR_MEM_FROM_REG:
+	assert(mod == .REGISTER_MODE && w)
+	dest_index, source_index := get_dest_source_indices(instruction)
+	registers[dest_index] -= registers[source_index]
+	flags.sign = extract(registers[dest_index], 15, 1) == 1
+	flags.zero = registers[dest_index] == 0
+
+    case .ADD_REG_OR_MEM_FROM_REG:
+	assert(mod == .REGISTER_MODE && w)
+	dest_index, source_index := get_dest_source_indices(instruction)
+	registers[dest_index] += registers[source_index]
+	flags.sign = extract(registers[dest_index], 15, 1) == 1
+	flags.zero = registers[dest_index] == 0
+
+    case .CMP_REG_OR_MEM_FROM_REG:
+	assert(mod == .REGISTER_MODE && w)
+	dest_index, source_index := get_dest_source_indices(instruction)
+	copy_dest := registers[dest_index]
+	copy_dest -= registers[source_index]
+	flags.sign = extract(copy_dest, 15, 1) == 1
+	flags.zero = copy_dest == 0
+
+    case .ADD_IMMEDIATE_REG_MEM:
+	assert(w && mod == .REGISTER_MODE)
+	dest_index := r_m
+	registers[dest_index] += data
+	flags.sign = extract(registers[dest_index], 15, 1) == 1
+	flags.zero = registers[dest_index] == 0
+
+    case .SUB_IMMEDIATE_REG_MEM:
+	assert(w && mod == .REGISTER_MODE)
+	dest_index := r_m
+	registers[dest_index] -= data
+	flags.sign = extract(registers[dest_index], 15, 1) == 1
+	flags.zero = registers[dest_index] == 0
+
+    case .CMP_IMMEDIATE_REG_MEM:
+	assert(w && mod == .REGISTER_MODE)
+	dest_index := r_m
+	copy_dest := registers[dest_index]
+	copy_dest -= data
+	flags.sign = extract(copy_dest, 15, 1) == 1
+	flags.zero = copy_dest == 0
+    }
+
+    get_dest_source_indices :: #force_inline proc(instruction: Instruction) -> (dest_index, source_index: u8) {
+	using instruction
 	if d {
-	    destination_index = register_wide_to_u8[reg.(Registers_wide)]
+	    dest_index = register_wide_to_u8[reg.(Registers_wide)]
 	    source_index = r_m
 	} else {
-	    destination_index = r_m
+	    dest_index = r_m
 	    source_index = register_wide_to_u8[reg.(Registers_wide)]
 	}
-	registers[destination_index] = registers[source_index]
+	return
     }
 }
 
@@ -581,4 +626,9 @@ Instruction :: struct {
     r_m:   u8, // 3 bits
     displ: i16, // can be 8 or 16 bits
     data:  u16, // can be 8 or 16 bits
+}
+
+Flags :: struct {
+    sign: bool,
+    zero: bool,
 }

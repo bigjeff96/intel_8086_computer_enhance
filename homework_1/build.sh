@@ -1,8 +1,8 @@
 #!/usr/bin/bash
 
 set -e
-nasm data/listing_0044_register_movs.asm 
-CHALLENGE=/home/joseph/Dropbox/Projects/Performance_aware/homeworks/homework_1/data/listing_0044_register_movs
+nasm data/listing_0046_add_sub_cmp.asm 
+CHALLENGE=/home/joseph/Dropbox/Projects/Performance_aware/homeworks/homework_1/data/listing_0046_add_sub_cmp
 echo BUILD:
 time odin build . -debug -o:minimal -use-separate-modules -out:intel_8086.bin
 echo OUTPUT:
