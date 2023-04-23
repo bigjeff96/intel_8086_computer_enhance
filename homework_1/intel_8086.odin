@@ -28,7 +28,6 @@ main :: proc() {
 	log.error("Can't make test.asm")
 	os.exit(1)
     }
-    fmt.fprintf(fd, "bits 16\n\n")
     
     registers := [8]u16{}
     flags: Flags
@@ -45,6 +44,7 @@ main :: proc() {
     fmt.println(ip)
 
     ip = 0
+    fmt.fprintf(fd, "bits 16\n\n")
     for ip < len(data) {
         instruction, bytes_used_by_inst := get_instruction_from_bytes(data[ip:])
 	ip += bytes_used_by_inst
