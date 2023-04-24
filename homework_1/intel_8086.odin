@@ -23,33 +23,41 @@ main :: proc() {
         os.exit(1)
     }
     defer delete(data)
+    
+    cpu: Cpu
+    for cpu.ip < len(data) {
+        instruction, bytes_used_by_inst := get_instruction_from_bytes(data[cpu.ip:])
+	cpu.ip += bytes_used_by_inst
+	compute_instruction(instruction, &cpu)
+	fmt.println(instruction.op)
+	fmt.println(instruction.mod)
+	fmt.println(instruction.r_m)
+	write_asm_instruction(os.stdout, instruction)
+	print_cpu_state(&cpu)
+    }
+
     fd, err := os.open("test.asm", os.O_RDWR | os.O_CREATE | os.O_TRUNC, 0o777)
     if err != os.ERROR_NONE {
 	log.error("Can't make test.asm")
 	os.exit(1)
     }
-    
-    registers := [8]u16{}
-    flags: Flags
-    ip := 0
-    for ip < len(data) {
-        instruction, bytes_used_by_inst := get_instruction_from_bytes(data[ip:])
-	ip += bytes_used_by_inst
-	fmt.println(instruction.op)
-	compute_instruction(instruction,registers[:], &flags, &ip)
-    }
-
-    print_registers(registers[:])
-    fmt.println(flags)
-    fmt.println(ip)
-
-    ip = 0
+    defer os.close(fd)
     fmt.fprintf(fd, "bits 16\n\n")
-    for ip < len(data) {
-        instruction, bytes_used_by_inst := get_instruction_from_bytes(data[ip:])
-	ip += bytes_used_by_inst
+    cpu.ip = 0
+    for cpu.ip < len(data) {
+        instruction, bytes_used_by_inst := get_instruction_from_bytes(data[cpu.ip:])
+	cpu.ip += bytes_used_by_inst
         write_asm_instruction(fd, instruction)
     }
+
+    // write out the memory
+    mem_file, err1 := os.open("mem.data", os.O_RDWR | os.O_CREATE | os.O_TRUNC, 0o777)
+    if err1 != os.ERROR_NONE {
+	os.exit(1)
+    }
+    defer os.close(mem_file)
+    os.write(mem_file, cpu.memory[:])
+    
 }
 
 get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
@@ -430,8 +438,8 @@ write_asm_instruction :: proc(fd: os.Handle, instruction: Instruction) {
 
 }
 
-compute_instruction :: proc(instruction: Instruction, registers: []u16, flags: ^Flags, ip: ^int) {
-    using instruction
+compute_instruction :: proc(instruction: Instruction, cpu: ^Cpu) {
+    using instruction, cpu
     assert(len(registers) == 8)
     #partial switch op {
     case .MOV_IMMEDIATE_TO_REG:
@@ -440,9 +448,121 @@ compute_instruction :: proc(instruction: Instruction, registers: []u16, flags: ^
 	registers[dest_index] = data
 
     case .MOV_REG_OR_MEM_FROM_REG:
-	assert(mod == .REGISTER_MODE && w)
-	dest_index, source_index := get_dest_source_indices(instruction)
-	registers[dest_index] = registers[source_index]
+	assert(w)
+	switch mod {
+	case .REGISTER_MODE:
+	    dest_index, source_index := get_dest_source_indices(instruction)
+	    registers[dest_index] = registers[source_index]
+
+	case .MEMORY_MODE:
+	    effective_address: int
+	    switch cast(Effective_address)r_m {
+	    case .BP: // direct address
+		effective_address = auto_cast displ
+	    case .BX_PLUS_SI:
+		effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.si])
+	    case .BP_PLUS_DI:
+		effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.di])
+	    case .BP_PLUS_SI:
+		effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.si])
+	    case .BX_PLUS_DI:
+		effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.di])
+	    case .BX:
+		effective_address = auto_cast registers[Registers_wide.bx]
+	    case .DI:
+		effective_address = auto_cast registers[Registers_wide.di]
+	    case .SI:
+		effective_address = auto_cast registers[Registers_wide.si]
+	    }
+	    
+	    if d {
+		value: u16 = cast(u16)memory[effective_address] + cast(u16)memory[effective_address+1] << 8
+		registers[auto_cast reg.(Registers_wide)] = value
+	    } else {
+		memory[effective_address] = auto_cast extract(registers[auto_cast reg.(Registers_wide)], 0, 8)
+		memory[effective_address + 1] = auto_cast extract(registers[auto_cast reg.(Registers_wide)], 7, 8)
+	    }
+
+	case .MEMORY_MODE_16BIT_DISP, .MEMORY_MODE_8BIT_DISP:
+	    effective_address: int
+	    switch cast(Effective_address)r_m {
+	    case .BP: // direct address
+		effective_address = auto_cast (registers[Registers_wide.bp] + auto_cast displ)
+	    case .BX_PLUS_SI:
+		effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.si] + auto_cast displ)
+	    case .BP_PLUS_DI:
+		effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.di] + auto_cast displ)
+	    case .BP_PLUS_SI:
+		effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.si] + auto_cast displ)
+	    case .BX_PLUS_DI:
+		effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.di] + auto_cast displ)
+	    case .BX:
+		effective_address = auto_cast registers[Registers_wide.bx] + auto_cast displ
+	    case .DI:
+		effective_address = auto_cast registers[Registers_wide.di] + auto_cast displ
+	    case .SI:
+		effective_address = auto_cast registers[Registers_wide.si] + auto_cast displ
+	    }
+
+	    if d {
+		value: u16 = cast(u16)memory[effective_address] + cast(u16)memory[effective_address+1] << 8
+		registers[auto_cast reg.(Registers_wide)] = value
+	    } else {
+		memory[effective_address] = auto_cast extract(registers[auto_cast reg.(Registers_wide)], 0, 8)
+		memory[effective_address + 1] = auto_cast extract(registers[auto_cast reg.(Registers_wide)], 7, 8)
+	    }
+	}
+
+    case .MOV_IMMEDIATE_REG_MEM:
+	effective_address: int
+	switch mod {
+	case .MEMORY_MODE:
+	    switch cast(Effective_address)r_m {
+	    case .BP: // direct address
+		effective_address = auto_cast displ
+	    case .BX_PLUS_SI:
+		effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.si])
+	    case .BP_PLUS_DI:
+		effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.di])
+	    case .BP_PLUS_SI:
+		effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.si])
+	    case .BX_PLUS_DI:
+		effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.di])
+	    case .BX:
+		effective_address = auto_cast registers[Registers_wide.bx]
+	    case .DI:
+		effective_address = auto_cast registers[Registers_wide.di]
+	    case .SI:
+		effective_address = auto_cast registers[Registers_wide.si]
+	    }
+	    memory[effective_address] = auto_cast extract(data,0,8)
+	    if w do memory[effective_address + 1] = auto_cast extract(data, 7, 8)
+	    
+	case .MEMORY_MODE_8BIT_DISP, .MEMORY_MODE_16BIT_DISP:
+	    switch cast(Effective_address)r_m {
+	    case .BP: // direct address
+		effective_address = auto_cast (registers[Registers_wide.bp] + auto_cast displ)
+	    case .BX_PLUS_SI:
+		effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.si] + auto_cast displ)
+	    case .BP_PLUS_DI:
+		effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.di] + auto_cast displ)
+	    case .BP_PLUS_SI:
+		effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.si] + auto_cast displ)
+	    case .BX_PLUS_DI:
+		effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.di] + auto_cast displ)
+	    case .BX:
+		effective_address = auto_cast registers[Registers_wide.bx] + auto_cast displ
+	    case .DI:
+		effective_address = auto_cast registers[Registers_wide.di] + auto_cast displ
+	    case .SI:
+		effective_address = auto_cast registers[Registers_wide.si] + auto_cast displ
+	    }
+	    memory[effective_address] = auto_cast extract(data,0,8)
+	    if w do memory[effective_address + 1] = auto_cast extract(data, 7, 8)
+	    
+	case .REGISTER_MODE:
+	    registers[cast(Registers_wide)r_m] = data
+	}
 
     case .SUB_REG_OR_MEM_FROM_REG:
 	assert(mod == .REGISTER_MODE && w)
@@ -491,7 +611,7 @@ compute_instruction :: proc(instruction: Instruction, registers: []u16, flags: ^
     case .JMP_NOT_EQUAL: //jmp not zero
 	if !flags.zero {
 	    data_i8 : i8 = auto_cast extract(data, 0, 8)
-	    ip^ += auto_cast data_i8
+	    ip += auto_cast data_i8
 	}
 	
     }
@@ -507,6 +627,13 @@ compute_instruction :: proc(instruction: Instruction, registers: []u16, flags: ^
 	}
 	return
     }
+}
+
+print_cpu_state :: proc(cpu: ^Cpu) {
+    using cpu
+    print_registers(registers[:])
+    fmt.println(flags)
+    fmt.printf("ip: %d\n", ip)
 }
 
 print_registers :: proc(registers: []u16) {
@@ -644,4 +771,11 @@ Instruction :: struct {
 Flags :: struct {
     sign: bool,
     zero: bool,
+}
+
+Cpu :: struct {
+    flags: Flags,
+    ip: int,
+    registers: [8]u16,
+    memory: [1024*1024]u8,
 }
