@@ -23,41 +23,42 @@ main :: proc() {
         os.exit(1)
     }
     defer delete(data)
-    
+
     cpu: Cpu
     for cpu.ip < len(data) {
+
         instruction, bytes_used_by_inst := get_instruction_from_bytes(data[cpu.ip:])
-	cpu.ip += bytes_used_by_inst
-	compute_instruction(instruction, &cpu)
-	fmt.println(instruction.op)
-	fmt.println(instruction.mod)
-	fmt.println(instruction.r_m)
-	write_asm_instruction(os.stdout, instruction)
-	print_cpu_state(&cpu)
+        cpu.ip += bytes_used_by_inst
+        compute_instruction(instruction, &cpu)
+        fmt.println(instruction.op)
+        fmt.println(instruction.mod)
+        fmt.println(instruction.r_m)
+        write_asm_instruction(os.stdout, instruction)
+        print_cpu_state(&cpu)
     }
 
     fd, err := os.open("test.asm", os.O_RDWR | os.O_CREATE | os.O_TRUNC, 0o777)
     if err != os.ERROR_NONE {
-	log.error("Can't make test.asm")
-	os.exit(1)
+        log.error("Can't make test.asm")
+        os.exit(1)
     }
     defer os.close(fd)
     fmt.fprintf(fd, "bits 16\n\n")
     cpu.ip = 0
     for cpu.ip < len(data) {
         instruction, bytes_used_by_inst := get_instruction_from_bytes(data[cpu.ip:])
-	cpu.ip += bytes_used_by_inst
+        cpu.ip += bytes_used_by_inst
         write_asm_instruction(fd, instruction)
     }
 
     // write out the memory
     mem_file, err1 := os.open("mem.data", os.O_RDWR | os.O_CREATE | os.O_TRUNC, 0o777)
     if err1 != os.ERROR_NONE {
-	os.exit(1)
+        os.exit(1)
     }
     defer os.close(mem_file)
     os.write(mem_file, cpu.memory[:])
-    
+
 }
 
 get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
@@ -221,7 +222,7 @@ get_instruction_from_bytes :: proc(data: []byte) -> (Instruction, int) {
     }
 
     when !ODIN_DEBUG {
-	fmt.println(result_instruction.op)
+        fmt.println(result_instruction.op)
     }
     return result_instruction, bytes_used
 
@@ -443,189 +444,202 @@ compute_instruction :: proc(instruction: Instruction, cpu: ^Cpu) {
     assert(len(registers) == 8)
     #partial switch op {
     case .MOV_IMMEDIATE_TO_REG:
-	assert(w)
-	dest_index : int = auto_cast reg.(Registers_wide)
-	registers[dest_index] = data
+        assert(w)
+        dest_index: int = auto_cast reg.(Registers_wide)
+        registers[dest_index] = data
 
     case .MOV_REG_OR_MEM_FROM_REG:
-	assert(w)
-	switch mod {
-	case .REGISTER_MODE:
-	    dest_index, source_index := get_dest_source_indices(instruction)
-	    registers[dest_index] = registers[source_index]
+        assert(w)
+        switch mod {
+        case .REGISTER_MODE:
+            dest_index, source_index := get_dest_source_indices(instruction)
+            registers[dest_index] = registers[source_index]
 
-	case .MEMORY_MODE:
-	    effective_address: int
-	    switch cast(Effective_address)r_m {
-	    case .BP: // direct address
-		effective_address = auto_cast displ
-	    case .BX_PLUS_SI:
-		effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.si])
-	    case .BP_PLUS_DI:
-		effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.di])
-	    case .BP_PLUS_SI:
-		effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.si])
-	    case .BX_PLUS_DI:
-		effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.di])
-	    case .BX:
-		effective_address = auto_cast registers[Registers_wide.bx]
-	    case .DI:
-		effective_address = auto_cast registers[Registers_wide.di]
-	    case .SI:
-		effective_address = auto_cast registers[Registers_wide.si]
-	    }
-	    
-	    if d {
-		value: u16 = cast(u16)memory[effective_address] + cast(u16)memory[effective_address+1] << 8
-		registers[auto_cast reg.(Registers_wide)] = value
-	    } else {
-		memory[effective_address] = auto_cast extract(registers[auto_cast reg.(Registers_wide)], 0, 8)
-		memory[effective_address + 1] = auto_cast extract(registers[auto_cast reg.(Registers_wide)], 7, 8)
-	    }
+        case .MEMORY_MODE:
+            effective_address: int
+            switch cast(Effective_address)r_m {
+            case .BP:
+                // direct address
+                effective_address = auto_cast displ
+            case .BX_PLUS_SI:
+                effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.si])
+            case .BP_PLUS_DI:
+                effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.di])
+            case .BP_PLUS_SI:
+                effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.si])
+            case .BX_PLUS_DI:
+                effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.di])
+            case .BX:
+                effective_address = auto_cast registers[Registers_wide.bx]
+            case .DI:
+                effective_address = auto_cast registers[Registers_wide.di]
+            case .SI:
+                effective_address = auto_cast registers[Registers_wide.si]
+            }
 
-	case .MEMORY_MODE_16BIT_DISP, .MEMORY_MODE_8BIT_DISP:
-	    effective_address: int
-	    switch cast(Effective_address)r_m {
-	    case .BP: // direct address
-		effective_address = auto_cast (registers[Registers_wide.bp] + auto_cast displ)
-	    case .BX_PLUS_SI:
-		effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.si] + auto_cast displ)
-	    case .BP_PLUS_DI:
-		effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.di] + auto_cast displ)
-	    case .BP_PLUS_SI:
-		effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.si] + auto_cast displ)
-	    case .BX_PLUS_DI:
-		effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.di] + auto_cast displ)
-	    case .BX:
-		effective_address = auto_cast registers[Registers_wide.bx] + auto_cast displ
-	    case .DI:
-		effective_address = auto_cast registers[Registers_wide.di] + auto_cast displ
-	    case .SI:
-		effective_address = auto_cast registers[Registers_wide.si] + auto_cast displ
-	    }
+            if d {
+                value: u16 = cast(u16)memory[effective_address] + cast(u16)memory[effective_address + 1] << 8
+                registers[auto_cast reg.(Registers_wide)] = value
+            } else {
+                memory[effective_address] = auto_cast extract(registers[auto_cast reg.(Registers_wide)], 0, 8)
+                memory[effective_address + 1] = auto_cast extract(registers[auto_cast reg.(Registers_wide)], 7, 8)
+            }
 
-	    if d {
-		value: u16 = cast(u16)memory[effective_address] + cast(u16)memory[effective_address+1] << 8
-		registers[auto_cast reg.(Registers_wide)] = value
-	    } else {
-		memory[effective_address] = auto_cast extract(registers[auto_cast reg.(Registers_wide)], 0, 8)
-		memory[effective_address + 1] = auto_cast extract(registers[auto_cast reg.(Registers_wide)], 7, 8)
-	    }
-	}
+        case .MEMORY_MODE_16BIT_DISP, .MEMORY_MODE_8BIT_DISP:
+            effective_address: int
+            switch cast(Effective_address)r_m {
+            case .BP:
+                // direct address
+                effective_address = auto_cast (registers[Registers_wide.bp] + auto_cast displ)
+            case .BX_PLUS_SI:
+                effective_address =
+                auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.si] + auto_cast displ)
+            case .BP_PLUS_DI:
+                effective_address =
+                auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.di] + auto_cast displ)
+            case .BP_PLUS_SI:
+                effective_address =
+                auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.si] + auto_cast displ)
+            case .BX_PLUS_DI:
+                effective_address =
+                auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.di] + auto_cast displ)
+            case .BX:
+                effective_address = auto_cast registers[Registers_wide.bx] + auto_cast displ
+            case .DI:
+                effective_address = auto_cast registers[Registers_wide.di] + auto_cast displ
+            case .SI:
+                effective_address = auto_cast registers[Registers_wide.si] + auto_cast displ
+            }
+
+            if d {
+                value: u16 = cast(u16)memory[effective_address] + cast(u16)memory[effective_address + 1] << 8
+                registers[auto_cast reg.(Registers_wide)] = value
+            } else {
+                memory[effective_address] = auto_cast extract(registers[auto_cast reg.(Registers_wide)], 0, 8)
+                memory[effective_address + 1] = auto_cast extract(registers[auto_cast reg.(Registers_wide)], 7, 8)
+            }
+        }
 
     case .MOV_IMMEDIATE_REG_MEM:
-	effective_address: int
-	switch mod {
-	case .MEMORY_MODE:
-	    switch cast(Effective_address)r_m {
-	    case .BP: // direct address
-		effective_address = auto_cast displ
-	    case .BX_PLUS_SI:
-		effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.si])
-	    case .BP_PLUS_DI:
-		effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.di])
-	    case .BP_PLUS_SI:
-		effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.si])
-	    case .BX_PLUS_DI:
-		effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.di])
-	    case .BX:
-		effective_address = auto_cast registers[Registers_wide.bx]
-	    case .DI:
-		effective_address = auto_cast registers[Registers_wide.di]
-	    case .SI:
-		effective_address = auto_cast registers[Registers_wide.si]
-	    }
-	    memory[effective_address] = auto_cast extract(data,0,8)
-	    if w do memory[effective_address + 1] = auto_cast extract(data, 7, 8)
-	    
-	case .MEMORY_MODE_8BIT_DISP, .MEMORY_MODE_16BIT_DISP:
-	    switch cast(Effective_address)r_m {
-	    case .BP: // direct address
-		effective_address = auto_cast (registers[Registers_wide.bp] + auto_cast displ)
-	    case .BX_PLUS_SI:
-		effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.si] + auto_cast displ)
-	    case .BP_PLUS_DI:
-		effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.di] + auto_cast displ)
-	    case .BP_PLUS_SI:
-		effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.si] + auto_cast displ)
-	    case .BX_PLUS_DI:
-		effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.di] + auto_cast displ)
-	    case .BX:
-		effective_address = auto_cast registers[Registers_wide.bx] + auto_cast displ
-	    case .DI:
-		effective_address = auto_cast registers[Registers_wide.di] + auto_cast displ
-	    case .SI:
-		effective_address = auto_cast registers[Registers_wide.si] + auto_cast displ
-	    }
-	    memory[effective_address] = auto_cast extract(data,0,8)
-	    if w do memory[effective_address + 1] = auto_cast extract(data, 7, 8)
-	    
-	case .REGISTER_MODE:
-	    registers[cast(Registers_wide)r_m] = data
-	}
+        effective_address: int
+        switch mod {
+        case .MEMORY_MODE:
+            switch cast(Effective_address)r_m {
+            case .BP:
+                // direct address
+                effective_address = auto_cast displ
+            case .BX_PLUS_SI:
+                effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.si])
+            case .BP_PLUS_DI:
+                effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.di])
+            case .BP_PLUS_SI:
+                effective_address = auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.si])
+            case .BX_PLUS_DI:
+                effective_address = auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.di])
+            case .BX:
+                effective_address = auto_cast registers[Registers_wide.bx]
+            case .DI:
+                effective_address = auto_cast registers[Registers_wide.di]
+            case .SI:
+                effective_address = auto_cast registers[Registers_wide.si]
+            }
+            memory[effective_address] = auto_cast extract(data, 0, 8)
+            if w do memory[effective_address + 1] = auto_cast extract(data, 7, 8)
+
+        case .MEMORY_MODE_8BIT_DISP, .MEMORY_MODE_16BIT_DISP:
+            switch cast(Effective_address)r_m {
+            case .BP:
+                // direct address
+                effective_address = auto_cast (registers[Registers_wide.bp] + auto_cast displ)
+            case .BX_PLUS_SI:
+                effective_address =
+                auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.si] + auto_cast displ)
+            case .BP_PLUS_DI:
+                effective_address =
+                auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.di] + auto_cast displ)
+            case .BP_PLUS_SI:
+                effective_address =
+                auto_cast (registers[Registers_wide.bp] + registers[Registers_wide.si] + auto_cast displ)
+            case .BX_PLUS_DI:
+                effective_address =
+                auto_cast (registers[Registers_wide.bx] + registers[Registers_wide.di] + auto_cast displ)
+            case .BX:
+                effective_address = auto_cast registers[Registers_wide.bx] + auto_cast displ
+            case .DI:
+                effective_address = auto_cast registers[Registers_wide.di] + auto_cast displ
+            case .SI:
+                effective_address = auto_cast registers[Registers_wide.si] + auto_cast displ
+            }
+            memory[effective_address] = auto_cast extract(data, 0, 8)
+            if w do memory[effective_address + 1] = auto_cast extract(data, 7, 8)
+
+        case .REGISTER_MODE:
+            registers[cast(Registers_wide)r_m] = data
+        }
 
     case .SUB_REG_OR_MEM_FROM_REG:
-	assert(mod == .REGISTER_MODE && w)
-	dest_index, source_index := get_dest_source_indices(instruction)
-	registers[dest_index] -= registers[source_index]
-	flags.sign = extract(registers[dest_index], 15, 1) == 1
-	flags.zero = registers[dest_index] == 0
+        assert(mod == .REGISTER_MODE && w)
+        dest_index, source_index := get_dest_source_indices(instruction)
+        registers[dest_index] -= registers[source_index]
+        flags.sign = extract(registers[dest_index], 15, 1) == 1
+        flags.zero = registers[dest_index] == 0
 
     case .ADD_REG_OR_MEM_FROM_REG:
-	assert(mod == .REGISTER_MODE && w)
-	dest_index, source_index := get_dest_source_indices(instruction)
-	registers[dest_index] += registers[source_index]
-	flags.sign = extract(registers[dest_index], 15, 1) == 1
-	flags.zero = registers[dest_index] == 0
+        assert(mod == .REGISTER_MODE && w)
+        dest_index, source_index := get_dest_source_indices(instruction)
+        registers[dest_index] += registers[source_index]
+        flags.sign = extract(registers[dest_index], 15, 1) == 1
+        flags.zero = registers[dest_index] == 0
 
     case .CMP_REG_OR_MEM_FROM_REG:
-	assert(mod == .REGISTER_MODE && w)
-	dest_index, source_index := get_dest_source_indices(instruction)
-	copy_dest := registers[dest_index]
-	copy_dest -= registers[source_index]
-	flags.sign = extract(copy_dest, 15, 1) == 1
-	flags.zero = copy_dest == 0
+        assert(mod == .REGISTER_MODE && w)
+        dest_index, source_index := get_dest_source_indices(instruction)
+        copy_dest := registers[dest_index]
+        copy_dest -= registers[source_index]
+        flags.sign = extract(copy_dest, 15, 1) == 1
+        flags.zero = copy_dest == 0
 
     case .ADD_IMMEDIATE_REG_MEM:
-	assert(w && mod == .REGISTER_MODE)
-	dest_index := r_m
-	registers[dest_index] += data
-	flags.sign = extract(registers[dest_index], 15, 1) == 1
-	flags.zero = registers[dest_index] == 0
+        assert(w && mod == .REGISTER_MODE)
+        dest_index := r_m
+        registers[dest_index] += data
+        flags.sign = extract(registers[dest_index], 15, 1) == 1
+        flags.zero = registers[dest_index] == 0
 
     case .SUB_IMMEDIATE_REG_MEM:
-	assert(w && mod == .REGISTER_MODE)
-	dest_index := r_m
-	registers[dest_index] -= data
-	flags.sign = extract(registers[dest_index], 15, 1) == 1
-	flags.zero = registers[dest_index] == 0
+        assert(w && mod == .REGISTER_MODE)
+        dest_index := r_m
+        registers[dest_index] -= data
+        flags.sign = extract(registers[dest_index], 15, 1) == 1
+        flags.zero = registers[dest_index] == 0
 
     case .CMP_IMMEDIATE_REG_MEM:
-	assert(w && mod == .REGISTER_MODE)
-	dest_index := r_m
-	copy_dest := registers[dest_index]
-	copy_dest -= data
-	flags.sign = extract(copy_dest, 15, 1) == 1
-	flags.zero = copy_dest == 0
+        assert(w && mod == .REGISTER_MODE)
+        dest_index := r_m
+        copy_dest := registers[dest_index]
+        copy_dest -= data
+        flags.sign = extract(copy_dest, 15, 1) == 1
+        flags.zero = copy_dest == 0
 
-    case .JMP_NOT_EQUAL: //jmp not zero
-	if !flags.zero {
-	    data_i8 : i8 = auto_cast extract(data, 0, 8)
-	    ip += auto_cast data_i8
-	}
-	
+    case .JMP_NOT_EQUAL:
+        //jmp not zero
+        if !flags.zero {
+            data_i8: i8 = auto_cast extract(data, 0, 8)
+            ip += auto_cast data_i8
+        }
+
     }
 
     get_dest_source_indices :: #force_inline proc(instruction: Instruction) -> (dest_index, source_index: u8) {
-	using instruction
-	if d {
-	    dest_index = register_wide_to_u8[reg.(Registers_wide)]
-	    source_index = r_m
-	} else {
-	    dest_index = r_m
-	    source_index = register_wide_to_u8[reg.(Registers_wide)]
-	}
-	return
+        using instruction
+        if d {
+            dest_index = register_wide_to_u8[reg.(Registers_wide)]
+            source_index = r_m
+        } else {
+            dest_index = r_m
+            source_index = register_wide_to_u8[reg.(Registers_wide)]
+        }
+        return
     }
 }
 
@@ -717,7 +731,7 @@ Registers_wide :: enum u8 {
     di = 0x7,
 }
 
-register_wide_to_u8 := [Registers_wide]u8{
+register_wide_to_u8 := [Registers_wide]u8 {
     .ax = 0x0,
     .cx = 0x1,
     .dx = 0x2,
@@ -774,8 +788,8 @@ Flags :: struct {
 }
 
 Cpu :: struct {
-    flags: Flags,
-    ip: int,
+    flags:     Flags,
+    ip:        int,
     registers: [8]u16,
-    memory: [1024*1024]u8,
+    memory:    [1024 * 1024]u8,
 }
