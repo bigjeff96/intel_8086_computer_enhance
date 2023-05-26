@@ -26,7 +26,6 @@ main :: proc() {
 
     cpu: Cpu
     for cpu.ip < len(data) {
-
         instruction, bytes_used_by_inst := get_instruction_from_bytes(data[cpu.ip:])
         cpu.ip += bytes_used_by_inst
         compute_instruction(instruction, &cpu)
