@@ -1,0 +1,3 @@
+* Intel 8086 simulator
+A non-exhaustive implementation of an Intel 8086 disassembler, with some functionality to simulate some ops.
+This project was a homework for the "performance aware programming" course on [https://www.computerenhance.com/][computerenhance], given by Casey Muratori.
