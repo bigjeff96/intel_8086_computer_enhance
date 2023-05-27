@@ -1,5 +1,18 @@
 package intel_8086
 
+// This is a .odin file, but since jobmatch only accepts .txt files, I changed the file extension type
+
+/*
+
+* Intel 8086 simulator
+A non-exhaustive implementation of an Intel 8086 disassembler, with some functionality to simulate some ops.
+This project was a homework for the "performance aware programming" course on [[https://www.computerenhance.com/][computerenhance]], given by Casey Muratori.
+
+* Odin
+[[https://odin-lang.org/][Odin]] is a low level, manual memory managed programming lamguage that inspires to be a more ergonomic, more productive C.
+
+*/
+
 import "core:fmt"
 import "core:bytes"
 import "core:os"
