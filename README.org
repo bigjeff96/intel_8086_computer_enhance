@@ -3,4 +3,5 @@ A non-exhaustive implementation of an Intel 8086 disassembler, with some functio
 This project was a homework for the "performance aware programming" course on [[https://www.computerenhance.com/][computerenhance]], given by Casey Muratori.
 
 * Odin
-[[https://odin-lang.org/][Odin]] is a low level, manual memory managed programming lamguage that inspires to be a more ergonomic, production C.
+[[https://odin-lang.org/][Odin]] is a low level, manual memory managed programming lamguage that inspires to be a more ergonomic, more productive C.
+
