@@ -5,3 +5,4 @@ This project was a homework for the "performance aware programming" course on [[
 * Odin
 [[https://odin-lang.org/][Odin]] is a low level, manual memory managed programming lamguage that inspires to be a more ergonomic, more productive C.
 
+
