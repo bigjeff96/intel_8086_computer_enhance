@@ -1,0 +1,5 @@
+Warning: Layout string has additional text after the end of the top-level entry.
+Warning: The log pipe path has not been set in the configuration file!
+VIM - Vi IMproved 9.0 (2022 Jun 28, compiled Mar 21 2023 20:51:42)
+Unknown option argument: "--servername"
+More info with: "vim -h"
