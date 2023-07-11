@@ -2,6 +2,6 @@
 
 set -e
 echo BUILD:
-time g++ *.cpp -o test.bin -ggdb -fsanitize=bounds,undefined,null -Wall 
+time g++ *.cpp -o test.bin -O2 #-ggdb -fsanitize=bounds,undefined,null -Wall 
 echo OUTPUT:
 time ./test.bin
