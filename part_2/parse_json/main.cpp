@@ -3,7 +3,6 @@
 #define GB_IMPLEMENTATION
 #include "../gb.h"
 
-
 struct Pair {
     f64 x0, y0, x1, y1;
 };
@@ -49,7 +48,8 @@ struct Symbol {
     };
 };
 
-void print_symbol (Symbol sym) {
+void print_symbol(Symbol sym)
+{
     switch (sym.type) {
     case symbol_lcurly: {
         printf("lcurly\n");
@@ -90,7 +90,8 @@ void print_symbol (Symbol sym) {
     }
 }
 
-double parser_number(String_slice number_slice) {
+double parser_number(String_slice number_slice)
+{
 
     int numbers[20] = {};
     int numbers_count = 0;
@@ -111,25 +112,23 @@ double parser_number(String_slice number_slice) {
         }
     }
 
-
     for (int i = 0; i < digits_before_point; i++) {
         result += double(numbers[i]) * pow(10., double(digits_before_point - 1 - i));
     }
 
     for (int i = digits_before_point; i < numbers_count; i++) {
-        result += double(numbers[i]) * pow(10., double(-1 -(i - digits_before_point)));
+        result += double(numbers[i]) * pow(10., double(-1 - (i - digits_before_point)));
     }
 
     return result * (is_positive ? 1. : -1.);
 }
-
 
 gbArray(Pair) get_pairs_from_json(const char* json_file_path)
 {
 
     gbFileContents json_file = gb_file_read_contents(gb_heap_allocator(), 1, json_file_path);
     defer(gb_file_free_contents(&json_file));
-    
+
     gbArray(Symbol) symbols;
     gb_array_init(symbols, gb_heap_allocator());
     defer(gb_array_free(symbols));
@@ -246,14 +245,4 @@ gbArray(Pair) get_pairs_from_json(const char* json_file_path)
     return pairs;
 }
 
-
-int main() {
-    
-    gbArray(Pair) pairs = get_pairs_from_json("../pairs.json");
-
-    // for (int i = 0; i < gb_array_count(pairs); i++) {
-        // Pair pair = pairs[i];
-        // printf("x0 %.14g, y0 %.14g\n", pair.x0, pair.y0);
-    // }
-    // printf("count is %ld\n",gb_array_count(pairs));
-}
+int main() { gbArray(Pair) pairs = get_pairs_from_json("../pairs.json"); }
